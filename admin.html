@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nine Coffee — Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/admin.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        espresso: '#2C1810',
+                        mocha:    '#5C3317',
+                        caramel:  '#B8733D',
+                        latte:    '#DEC5A0',
+                        cream:    '#F7F2EC',
+                        parchment:'#FDFBF8',
+                        leaf:     '#1E5E40',
+                        sage:     '#3D9970',
+                        mint:     '#D1EDD8',
+                        sidebar:  '#1C1008',
+                    },
+                    fontFamily: {
+                        display: ['Playfair Display', 'serif'],
+                        body: ['DM Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div style="padding: 24px 20px 20px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:36px;height:36px;background:#B8733D;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">☕</div>
+      <div>
+        <p style="font-family:'Playfair Display',serif;font-weight:700;color:#FDFBF8;font-size:1rem;line-height:1.1;letter-spacing:-.3px;">Nine Coffee</p>
+        <p style="font-size:.65rem;color:#A89480;letter-spacing:.06em;margin-top:2px;">ADMIN PANEL</p>
+      </div>
+    </div>
+    <div style="margin-top:18px;height:1px;background:rgba(255,255,255,.08);"></div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <p style="font-size:.65rem;font-weight:600;color:#5C4030;letter-spacing:.08em;padding:0 18px 8px;text-transform:uppercase;">Main Menu</p>
+
+    <a class="nav-item active" onclick="showPage('dashboard',this)" href="#">
+      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-item" onclick="showPage('menu-mgmt',this)" href="#">
+      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg>
+      Manajemen Menu
+    </a>
+    <a class="nav-item" onclick="showPage('orders',this)" href="#">
+      <div style="position:relative;display:inline-block;">
+        <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="notif-dot" id="orderNotifDot"></span>
+      </div>
+      Pesanan Masuk
+      <span id="orderNavCount" style="margin-left:auto;background:#E05050;color:#fff;font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:20px;">0</span>
+    </a>
+
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:14px 10px;"></div>
+    <p style="font-size:.65rem;font-weight:600;color:#5C4030;letter-spacing:.08em;padding:0 18px 8px;text-transform:uppercase;">Reports</p>
+
+    <a class="nav-item" onclick="showPage('export',this)" href="#">
+      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Laporan Ekspor
+    </a>
+  </nav>
+
+  <div style="padding:16px 14px;border-top:1px solid rgba(255,255,255,.07);">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:50%;background:#B8733D;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#FFF;flex-shrink:0;">A</div>
+      <div style="flex:1;min-width:0;">
+        <p style="font-size:.825rem;font-weight:600;color:#FDFBF8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Admin Utama</p>
+        <p style="font-size:.7rem;color:#A89480;">Pemilik Kafe</p>
+      </div>
+      <button style="background:rgba(255,255,255,.06);border:none;border-radius:7px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Logout">
+        <svg width="15" height="15" fill="none" stroke="#A89480" stroke-width="1.8" stroke-linecap="round" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <!-- PAGE: DASHBOARD -->
+  <div id="page-dashboard" class="page active" style="padding:28px 28px 40px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;">
+      <div>
+        <h1 style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#2C1810;letter-spacing:-.5px;margin:0 0 4px;">Nine Coffee Analytics</h1>
+        <p style="font-size:.82rem;color:#8C7260;margin:0;" id="todayDate"></p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <select class="form-select form-input" style="width:auto;" onchange="updatePeriod(this.value)">
+          <option value="week">Minggu Ini</option>
+          <option value="month" selected>Bulan Ini</option>
+          <option value="year">Tahun Ini</option>
+        </select>
+        <div style="position:relative;">
+          <button onclick="toggleExport()" style="display:flex;align-items:center;gap:7px;background:#1E5E40;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.85rem;cursor:pointer;">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Unduh Laporan
+          </button>
+          <div class="export-dropdown" id="exportDrop">
+            <div class="export-opt" onclick="exportAction('xlsx')">📊 Ekspor Excel (.xlsx)</div>
+            <div class="export-opt" onclick="exportAction('pdf')">📄 Ekspor PDF (.pdf)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px;">
+      <div class="stat-card green">
+        <p style="font-size:.78rem;color:#8C7260;font-weight:500;margin:0 0 5px;">Total Pendapatan</p>
+        <p style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;color:#1E5E40;margin:0;" id="statRevenue">Rp 0</p>
+      </div>
+      <div class="stat-card amber">
+        <p style="font-size:.78rem;color:#8C7260;font-weight:500;margin:0 0 5px;">Jumlah Pesanan</p>
+        <p style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;color:#2C1810;margin:0;">0 Order</p>
+      </div>
+      <div class="stat-card blue">
+        <p style="font-size:.78rem;color:#8C7260;font-weight:500;margin:0 0 5px;">Produk Terlaris</p>
+        <p style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#2C1810;margin:0;">-</p>
+        <p style="font-size:.72rem;color:#A89480;margin:4px 0 0;">0 porsi terjual</p>
+      </div>
+      <div class="stat-card rose">
+        <p style="font-size:.78rem;color:#8C7260;font-weight:500;margin:0 0 5px;">Rata-rata Pelayanan</p>
+        <p style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;color:#2C1810;margin:0;">11 Menit</p>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:22px;">
+      <div class="chart-card">
+        <div class="chart-header">
+          <p style="font-weight:600;color:#2C1810;margin:0;">Tren Penjualan</p>
+          <div style="display:flex;gap:6px;">
+            <button onclick="switchChart('bar','week')" class="chart-tab" id="tab-week">Mingguan</button>
+            <button onclick="switchChart('bar','month')" class="chart-tab active" id="tab-month">Bulanan</button>
+          </div>
+        </div>
+        <div style="padding:18px;height:260px;"><canvas id="salesChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><p style="font-weight:600;color:#2C1810;margin:0;">Proporsi Kategori</p></div>
+        <div style="padding:16px;height:260px;"><canvas id="catChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header"><p style="font-weight:600;color:#2C1810;margin:0;">🏅 5 Menu Terlaris</p></div>
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Nama Menu</th><th>Kategori</th><th>Harga</th><th>Qty Terjual</th><th>Pendapatan</th><th>Status</th></tr></thead>
+        <tbody id="topMenuBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PAGE: MANAJEMEN MENU -->
+  <div id="page-menu-mgmt" class="page" style="padding:28px 28px 40px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;">
+      <div>
+        <h1 style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#2C1810;margin:0;">Kelola Menu Restoran</h1>
+      </div>
+      <button onclick="openAddModal()" style="background:#1E5E40;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:600;cursor:pointer;">+ Tambah Menu Baru</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <input type="text" placeholder="Cari nama menu..." class="form-input" style="max-width:280px;" oninput="filterMenu(this.value)">
+      <select class="form-input form-select" style="width:auto;" onchange="filterCat(this.value)"><option value="">Semua Kategori</option><option value="kopi">☕ Kopi</option><option value="nonkopi">🍵 Non-Kopi</option><option value="makanan">🥐 Makanan</option><option value="camilan">🍟 Camilan</option></select>
+      <select class="form-input form-select" style="width:auto;" onchange="filterStatus(this.value)"><option value="">Semua Status</option><option value="aktif">Aktif</option><option value="habis">Habis</option></select>
+      <span id="menuCountLabel" style="margin-left:auto;font-size:.82rem;color:#8C7260;"></span>
+    </div>
+
+    <div class="chart-card">
+      <table class="data-table">
+        <thead><tr><th>No</th><th>Foto</th><th>Nama Menu</th><th>Kategori</th><th>Harga</th><th>Status</th><th style="text-align:center;">Aksi</th></tr></thead>
+        <tbody id="menuTableBody"></tbody>
+      </table>
+      <div style="padding:14px;border-top:1px solid #F4F0EC;display:flex;justify-content:space-between;">
+        <p style="font-size:.78rem;color:#A89480;">Menampilkan <span id="showingCount"></span> dari <span id="totalCount"></span> menu</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: PESANAN MASUK -->
+  <div id="page-orders" class="page" style="padding:28px;">
+    <h1 style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#2C1810;margin-bottom:20px;">Pesanan Masuk</h1>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+      <div class="order-summary"><p>Pesanan Aktif</p><p id="activeOrderCount" style="font-size:1.45rem;font-weight:700;">0</p></div>
+      <div class="order-summary"><p>Menunggu</p><p id="waitingOrderCount" style="font-size:1.45rem;font-weight:700;">0</p></div>
+      <div class="order-summary"><p>Siap Diantar</p><p id="readyOrderCount" style="font-size:1.45rem;font-weight:700;">0</p></div>
+    </div>
+    <div class="order-grid" id="ordersGrid"></div>
+  </div>
+
+  <!-- PAGE: LAPORAN EKSPOR -->
+  <div id="page-export" class="page" style="padding:28px;">
+    <h1 style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#2C1810;margin-bottom:24px;">Laporan Ekspor</h1>
+    <div class="report-filter" style="margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end;">
+        <div><label>JENIS LAPORAN</label><select class="form-input form-select" id="reportType"><option value="Penjualan & Pendapatan">Penjualan & Pendapatan</option></select></div>
+        <div><label>PERIODE</label><select class="form-input form-select" id="reportPeriod" onchange="updateReportPreview()"><option value="Mei 2026">Mei 2026</option></select></div>
+        <div><label>FORMAT</label><div style="display:flex;gap:8px;"><button class="format-choice active" id="format-xlsx" onclick="selectReportFormat('xlsx')">📊 Excel</button><button class="format-choice" id="format-pdf" onclick="selectReportFormat('pdf')">📄 PDF</button></div></div>
+        <button class="report-button report-download" onclick="generateReport()">Unduh</button>
+      </div>
+    </div>
+    <div class="chart-card">
+      <table class="data-table">
+        <thead><tr><th>Nama File</th><th>Jenis</th><th>Periode</th><th>Format</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+        <tbody id="reportHistoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="menuModal" onclick="closeModalOutside(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h2 id="modalTitle" style="font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:700;margin-bottom:20px;">Tambah Menu Baru</h2>
+    <div style="display:flex;gap:12px;margin-bottom:18px;align-items:center;">
+      <div id="emojiPreview" style="width:64px;height:64px;background:#F7F2EC;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:2rem;cursor:pointer;" onclick="cycleEmoji()">☕</div>
+      <div><p style="font-size:.78rem;">Klik ikon untuk ganti</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+      <div style="grid-column:1/-1;"><label>Nama Menu *</label><input type="text" id="inputName" class="form-input"></div>
+      <div><label>Kategori *</label><select id="inputCat" class="form-input form-select"><option value="kopi">☕ Kopi</option><option value="nonkopi">🍵 Non-Kopi</option><option value="makanan">🥐 Makanan</option><option value="camilan">🍟 Camilan</option></select></div>
+      <div><label>Harga (Rp) *</label><input type="number" id="inputPrice" class="form-input"></div>
+      <div style="grid-column:1/-1;"><label>Deskripsi</label><input type="text" id="inputDesc" class="form-input"></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;"><button onclick="closeModal()" class="form-input" style="width:auto;">Batal</button><button onclick="saveMenu()" style="background:#1E5E40;color:#fff;border:none;border-radius:10px;padding:9px 20px;font-weight:600;">Simpan</button></div>
+  </div>
+</div>
+
+<div id="toast"><span id="toastIcon"></span><span id="toastMsg"></span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/data-store.js"></script>
+<script src="assets/js/admin.js"></script>
+</body>
+</html>

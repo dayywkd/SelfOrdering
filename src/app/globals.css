@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --espresso: #3B1F0E;
+  --mocha: #6B3A2A;
+  --caramel: #C07D4A;
+  --latte: #E8D5B7;
+  --cream: #F5EFE6;
+  --parchment: #FBF8F4;
+  --leaf: #2D6A4F;
+  --sage: #52B788;
+  --mint: #D8F3DC;
+}
+
+body {
+  background-color: var(--parchment);
+  color: var(--espresso);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .btn-premium {
+    @apply relative overflow-hidden transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .text-espresso { color: var(--espresso); }
+  .text-mocha { color: var(--mocha); }
+  .text-caramel { color: var(--caramel); }
+  .bg-parchment { background-color: var(--parchment); }
+  .bg-espresso { background-color: var(--espresso); }
+  .bg-leaf { background-color: var(--leaf); }
+  .bg-latte { background-color: var(--latte); }
+  .bg-cream { background-color: var(--cream); }
+  .border-latte { border-color: var(--latte); }
+  .border-caramel { border-color: var(--caramel); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+/* Custom Scrollbar for Admin Area */
+.admin-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: #E8D5B7;
+  border-radius: 10px;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #C07D4A;
+}

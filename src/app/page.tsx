@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Search, 
   ShoppingCart, 
@@ -36,10 +36,18 @@ interface MenuItem {
   emoji: string;
   is_active: boolean;
   sales_count: number;
+  image_url?: string;
+  ingredients?: string;
+  serving_style?: string;
+  sugar_levels?: string[];
+  sizes?: string[];
+  has_options?: boolean;
 }
 
 interface CartItem extends MenuItem {
   qty: number;
+  selectedSize?: string;
+  selectedSugar?: string;
 }
 
 // --- Helper Icon ---
@@ -54,12 +62,13 @@ const getCategoryIcon = (category: string, size: number = 24, className: string 
 };
 
 function MenuContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const tableParam = searchParams.get('table') || '-';
-  const tableNumber = `Meja ${tableParam}`;
+  const tableParam = searchParams.get('table');
+  const tableNumber = tableParam ? `Meja ${tableParam}` : 'Tanpa Meja';
 
   const [menuData, setMenuData] = useState<MenuItem[]>([]);
-  const [cart, setCart] = useState<{ [id: number]: number }>({});
+  const [cart, setCart] = useState<{ [id: string]: number }>({}); // Pindah ke string agar bisa simpan variasi
   const [currentCat, setCurrentCat] = useState('semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -69,20 +78,45 @@ function MenuContent() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isTableActive, setIsTableActive] = useState(true); 
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  const [selSize, setSelSize] = useState('Regular');
+  const [selSugar, setSelSugar] = useState('Normal');
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Load Data & Cek Status Pembayaran Callback dari Xendit
   useEffect(() => {
     fetchMenu();
+    checkTableStatus();
     
     // Cek URL params, jika ada ?payment=success berarti kembali dari Xendit
     if (searchParams.get('payment') === 'success') {
       setShowSuccess(true);
       // Bersihkan URL tanpa reload
-      window.history.replaceState(null, '', window.location.pathname + (tableParam !== '-' ? `?table=${tableParam}` : ''));
+      window.history.replaceState(null, '', window.location.pathname + (tableParam ? `?table=${tableParam}` : ''));
     }
   }, [searchParams, tableParam]);
+
+  const checkTableStatus = async () => {
+    if (!tableParam) {
+      setIsTableActive(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('tables')
+      .select('status')
+      .eq('number', tableNumber)
+      .single();
+
+    if (!error && data) {
+      setIsTableActive(data.status === 'active');
+    } else {
+      // Jika meja tidak ditemukan di DB, kita anggap tidak aktif (QR belum didaftarkan)
+      setIsTableActive(false);
+    }
+  };
 
   const fetchMenu = async () => {
     setLoading(true);
@@ -105,9 +139,21 @@ function MenuContent() {
     return m.is_active && matchesCat && matchesSearch;
   });
 
-  const cartItems: CartItem[] = Object.keys(cart).map(id => {
+  const cartItems: CartItem[] = Object.keys(cart).map(cartKey => {
+    const [id, size, sugar] = cartKey.split('|');
     const item = menuData.find(m => m.id === parseInt(id));
-    return { ...item!, qty: cart[parseInt(id)] };
+    
+    // Logika tambahan harga untuk Large
+    let finalPrice = item?.price || 0;
+    if (size === 'Large') finalPrice += 5000;
+
+    return { 
+      ...item!, 
+      price: finalPrice, // Gunakan harga yang sudah disesuaikan variasi
+      qty: cart[cartKey],
+      selectedSize: size !== 'undefined' ? size : undefined,
+      selectedSugar: sugar !== 'undefined' ? sugar : undefined
+    };
   });
 
   const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -115,35 +161,61 @@ function MenuContent() {
   const tax = Math.round(cartTotal * 0.1);
   const totalFinal = cartTotal + tax;
 
-  const updateQty = (id: number, delta: number) => {
+  const updateQty = (id: number, delta: number, size?: string, sugar?: string) => {
+    const cartKey = `${id}|${size}|${sugar}`;
     setCart(prev => {
-      const newQty = (prev[id] || 0) + delta;
+      const newQty = (prev[cartKey] || 0) + delta;
       if (newQty <= 0) {
-        const { [id]: _, ...rest } = prev;
+        const { [cartKey]: _, ...rest } = prev;
         return rest;
       }
-      return { ...prev, [id]: newQty };
+      return { ...prev, [cartKey]: newQty };
     });
   };
 
+  const addToCartFromModal = () => {
+    if (!selectedItem) return;
+    updateQty(selectedItem.id, 1, selSize, selSugar);
+    setSelectedItem(null);
+    setSelSize('Regular'); // Reset untuk item berikutnya
+    setSelSugar('Normal');
+  };
+
   const handleOrder = async () => {
-    if (cartCount === 0 || isProcessingPayment) return;
+    if (cartCount === 0 || isProcessingPayment || !isTableActive) return;
     setIsProcessingPayment(true);
     
+    // Validasi ulang status meja sebelum proses
+    const { data: tableData } = await supabase
+      .from('tables')
+      .select('status')
+      .eq('number', tableNumber)
+      .single();
+
+    if (tableData?.status !== 'active') {
+      alert('Maaf, meja ini sudah tidak aktif. Silakan hubungi barista.');
+      setIsTableActive(false);
+      setIsProcessingPayment(false);
+      return;
+    }
+    
     const exactCurrentTime = new Date().toISOString();
-    const orderItemsFormatted = cartItems.map(i => `${i.qty}x ${i.name}`);
-    const orderId = `ORD-${Date.now()}`; // ID sementara untuk invoice
+    const orderItemsFormatted = cartItems.map(i => {
+      const options = [i.selectedSize, i.selectedSugar].filter(Boolean).join(', ');
+      return `${i.qty}x ${i.name}${options ? ` (${options})` : ''}`;
+    });
+    const orderUuid = crypto.randomUUID();
 
     // JIKA NON-TUNAI (XENDIT)
     if (paymentMethod !== 'tunai') {
       try {
-        // 1. Simpan order ke supabase dulu dengan status 'unpaid' atau langsung 'waiting' (tergantung preferensi, kita asumsikan 'waiting' karena ini cafe)
+        // 1. Simpan order ke supabase dulu dengan status 'waiting'
         const { error: dbError } = await supabase.from('orders').insert([{
-          id: crypto.randomUUID(), // Supabase auto uuid, but let's let it auto generate if we don't specify, or we just let it insert
+          id: orderUuid, 
           table_number: tableNumber,
           customer_name: customerName || 'Pelanggan',
           payment_method: paymentMethod.toUpperCase(),
-          status: 'waiting', // Di sistem nyata yang lebih ketat, status awal harus 'unpaid'
+          status: 'waiting', 
           total_price: totalFinal,
           items: orderItemsFormatted,
           note: note,
@@ -157,7 +229,7 @@ function MenuContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orderId: orderId,
+            orderId: orderUuid, // Gunakan UUID yang sama
             amount: totalFinal,
             customerName: customerName || 'Pelanggan',
             tableNumber: tableNumber,
@@ -171,7 +243,7 @@ function MenuContent() {
 
         // 3. Redirect ke Halaman Xendit
         window.location.href = data.invoiceUrl;
-        return; // Jangan jalankan resetApp dulu karena pindah halaman
+        return; 
         
       } catch (err: any) {
         alert('Gagal memproses pembayaran: ' + err.message);
@@ -183,6 +255,7 @@ function MenuContent() {
     // JIKA TUNAI
     else {
       const { error } = await supabase.from('orders').insert([{
+        id: orderUuid,
         table_number: tableNumber,
         customer_name: customerName || 'Pelanggan',
         payment_method: 'Tunai',
@@ -194,7 +267,8 @@ function MenuContent() {
       }]);
 
       if (!error) {
-        setShowSuccess(true);
+        // Redirect ke halaman tracking untuk tunai juga
+        router.push(`/order/${orderUuid}`);
       } else {
         alert('Gagal membuat pesanan');
       }
@@ -295,10 +369,18 @@ function MenuContent() {
           {/* Menu Grid */}
           <div className="px-5 grid grid-cols-2 gap-4 mt-6">
             {filteredMenu.map(m => (
-              <div key={m.id} className="group bg-white rounded-[32px] border border-latte p-2 pb-4 shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1">
+              <div 
+                key={m.id} 
+                onClick={() => setSelectedItem(m)}
+                className="group bg-white rounded-[32px] border border-latte p-2 pb-4 shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1 cursor-pointer"
+              >
                 <div className="relative aspect-square bg-parchment rounded-[24px] flex items-center justify-center mb-3 overflow-hidden group-hover:bg-cream transition-colors">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-caramel/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  {getCategoryIcon(m.category, 36, "text-mocha/30 group-hover:text-caramel group-hover:scale-110 transition-all duration-500 relative z-10")}
+                  {m.image_url ? (
+                    <img src={m.image_url} alt={m.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-tr from-caramel/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  )}
+                  {!m.image_url && getCategoryIcon(m.category, 36, "text-mocha/30 group-hover:text-caramel group-hover:scale-110 transition-all duration-500 relative z-10")}
                 </div>
                 <div className="px-2">
                   <div className="flex flex-col gap-1">
@@ -313,30 +395,126 @@ function MenuContent() {
                   
                   <div className="flex items-center justify-between mt-4">
                     <span className="font-bold text-sm text-leaf">{fmt(m.price)}</span>
-                    
-                    {cart[m.id] ? (
-                      <div className="flex items-center gap-2.5 bg-cream rounded-xl p-1 shadow-inner">
-                        <button onClick={() => updateQty(m.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-transform">
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-xs font-bold text-espresso min-w-[12px] text-center">{cart[m.id]}</span>
-                        <button onClick={() => updateQty(m.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-transform">
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => updateQty(m.id, 1)}
-                        className="btn-premium w-9 h-9 bg-leaf text-parchment rounded-xl flex items-center justify-center shadow-lg shadow-leaf/20 hover:rotate-90"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    )}
+                    <div className="btn-premium w-9 h-9 bg-leaf/10 text-leaf rounded-xl flex items-center justify-center">
+                      <Plus size={18} />
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* MENU DETAIL MODAL */}
+          {selectedItem && (
+            <div className="fixed inset-0 z-[120] flex items-end justify-center animate-fade-in p-0 sm:p-4">
+              <div className="absolute inset-0 bg-espresso/70 backdrop-blur-md" onClick={() => setSelectedItem(null)}></div>
+              <div className="bg-parchment w-full sm:max-w-[430px] rounded-t-[40px] sm:rounded-[40px] p-6 pb-10 relative z-10 animate-slide-up shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar border-t border-white/20">
+                <button 
+                  onClick={() => setSelectedItem(null)}
+                  className="absolute top-5 right-5 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center text-espresso shadow-lg z-20 hover:scale-110 active:scale-90 transition-all"
+                >
+                  <X size={20} />
+                </button>
+
+                <div className="relative aspect-square w-full bg-white rounded-[32px] mb-6 overflow-hidden shadow-xl border border-latte/50">
+                  {selectedItem.image_url ? (
+                    <img src={selectedItem.image_url} alt={selectedItem.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-mocha/20">
+                      {getCategoryIcon(selectedItem.category, 80)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-black text-caramel uppercase tracking-[0.2em]">{selectedItem.category}</span>
+                        <h2 className="text-3xl font-serif font-black text-espresso mt-1">{selectedItem.name}</h2>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-leaf">
+                          {fmt(selectedItem.price + (selSize === 'Large' ? 5000 : 0))}
+                        </p>
+                        {selSize === 'Large' && <p className="text-[9px] font-bold text-caramel uppercase">Termasuk +5rb</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black text-mocha uppercase tracking-widest opacity-40">Deskripsi</h4>
+                    <p className="text-sm text-mocha leading-relaxed font-medium">{selectedItem.description}</p>
+                  </div>
+
+                  {selectedItem.ingredients && (
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black text-mocha uppercase tracking-widest opacity-40">Komposisi</h4>
+                      <p className="text-sm text-mocha leading-relaxed font-medium">{selectedItem.ingredients}</p>
+                    </div>
+                  )}
+
+                  {/* CUSTOMIZATION OPTIONS */}
+                  <div className="grid grid-cols-1 gap-6 pt-4 border-t border-latte/30">
+                    {/* SIZES */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-[10px] font-black text-espresso uppercase tracking-widest">Pilih Ukuran</h4>
+                        <span className="text-[9px] font-bold text-mocha opacity-40">Wajib Pilih Satu</span>
+                      </div>
+                      <div className="flex gap-3">
+                        {['Regular', 'Large'].map(size => (
+                          <button 
+                            key={size}
+                            onClick={() => setSelSize(size)}
+                            className={`flex-1 py-4 rounded-2xl border-2 font-bold text-xs transition-all relative overflow-hidden ${
+                              selSize === size 
+                              ? 'bg-espresso border-espresso text-parchment shadow-lg' 
+                              : 'bg-white border-latte text-mocha hover:bg-cream'
+                            }`}
+                          >
+                            {size}
+                            {size === 'Large' && <span className={`ml-1.5 opacity-60 ${selSize === size ? 'text-caramel' : 'text-caramel'}`}>+5k</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* SUGAR (If applicable) */}
+                    {(selectedItem.category.toLowerCase().includes('coffe') || selectedItem.category.toLowerCase().includes('teh')) && (
+                      <div className="space-y-3">
+                        <h4 className="text-[10px] font-black text-espresso uppercase tracking-widest">Tingkat Manis</h4>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                          {['No Sugar', 'Less Sugar', 'Normal', 'Extra'].map(sugar => (
+                            <button 
+                              key={sugar}
+                              onClick={() => setSelSugar(sugar)}
+                              className={`px-5 py-3.5 rounded-2xl border-2 font-bold text-[10px] transition-all whitespace-nowrap ${
+                                selSugar === sugar 
+                                ? 'bg-espresso border-espresso text-parchment shadow-lg' 
+                                : 'bg-white border-latte text-mocha hover:bg-cream'
+                              }`}
+                            >
+                              {sugar}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-4">
+                    <button 
+                      onClick={addToCartFromModal}
+                      className="w-full bg-leaf text-white py-5 rounded-[24px] font-black text-sm shadow-xl shadow-leaf/20 flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-leaf/90"
+                    >
+                      <Plus size={20} /> TAMBAH KE KERANJANG
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Empty State */}
           {filteredMenu.length === 0 && (
@@ -367,28 +545,41 @@ function MenuContent() {
 
           {/* Cart Items */}
           <div className="px-5 mt-8 flex flex-col gap-4">
-            {cartItems.map(item => (
-              <div key={item.id} className="flex items-center gap-4 p-3 bg-white rounded-3xl border border-latte shadow-sm animate-fade-in">
-                <div className="w-20 h-20 bg-parchment rounded-2xl flex items-center justify-center border border-latte/50 group">
-                  {getCategoryIcon(item.category, 28, "text-mocha/40 group-hover:scale-110 group-hover:text-caramel transition-all duration-300")}
+            {cartItems.map((item, idx) => (
+              <div key={`${item.id}-${idx}`} className="flex items-center gap-4 p-3 bg-white rounded-3xl border border-latte shadow-sm animate-fade-in">
+                <div className="w-20 h-20 bg-parchment rounded-2xl flex items-center justify-center border border-latte/50 overflow-hidden shrink-0">
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                  ) : (
+                    getCategoryIcon(item.category, 28, "text-mocha/40")
+                  )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-sm text-espresso">{item.name}</h3>
-                    <button onClick={() => updateQty(item.id, -item.qty)} className="text-mocha/30 hover:text-red-500 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start gap-2">
+                    <h3 className="font-bold text-sm text-espresso truncate">{item.name}</h3>
+                    <button onClick={() => updateQty(item.id, -item.qty, item.selectedSize, item.selectedSugar)} className="text-mocha/30 hover:text-red-500 transition-colors shrink-0">
                       <X size={16} />
                     </button>
                   </div>
-                  <p className="text-[10px] text-caramel font-bold mt-0.5">{fmt(item.price)}</p>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {item.selectedSize && (
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest ${item.selectedSize === 'Large' ? 'bg-caramel/10 border-caramel/20 text-caramel' : 'bg-parchment border-latte/50 text-mocha'}`}>
+                        {item.selectedSize} {item.selectedSize === 'Large' && '(+5rb)'}
+                      </span>
+                    )}
+                    {item.selectedSugar && (
+                      <span className="text-[8px] font-black bg-parchment px-1.5 py-0.5 rounded border border-latte/50 text-mocha uppercase tracking-widest">{item.selectedSugar}</span>
+                    )}
+                  </div>
                   
                   <div className="flex items-center justify-between mt-3">
-                    <p className="font-bold text-sm text-leaf">{fmt(item.price * item.qty)}</p>
+                    <p className="font-black text-sm text-leaf">{fmt(item.price * item.qty)}</p>
                     <div className="flex items-center gap-3 bg-parchment rounded-xl p-1 border border-latte/30">
-                      <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-all">
+                      <button onClick={() => updateQty(item.id, -1, item.selectedSize, item.selectedSugar)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-all">
                         <Minus size={14} />
                       </button>
                       <span className="text-xs font-bold text-espresso min-w-[12px] text-center">{item.qty}</span>
-                      <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-all">
+                      <button onClick={() => updateQty(item.id, 1, item.selectedSize, item.selectedSugar)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-mocha shadow-sm active:scale-90 transition-all">
                         <Plus size={14} />
                       </button>
                     </div>
@@ -493,24 +684,24 @@ function MenuContent() {
       )}
 
       {/* FLOAT BAR (HOME) */}
-      {!isCartPage && cartCount > 0 && (
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] p-5 z-50 animate-slide-up">
+      {!isCartPage && cartCount > 0 && !selectedItem && (
+        <div className="fixed bottom-6 left-0 right-0 px-5 z-50 animate-slide-up flex justify-center">
           <button 
             onClick={() => setIsCartPage(true)}
-            className="w-full bg-espresso text-parchment rounded-[28px] p-4 flex items-center justify-between shadow-2xl shadow-espresso/40 hover:scale-[1.02] transition-transform group overflow-hidden relative"
+            className="w-full max-w-[400px] bg-espresso text-parchment rounded-[28px] p-4 flex items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.4)] hover:scale-[1.02] active:scale-95 transition-all group overflow-hidden relative border border-white/10"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-caramel/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-caramel/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="flex items-center gap-4 relative z-10">
               <div className="w-12 h-12 bg-caramel rounded-2xl flex items-center justify-center shadow-lg shadow-caramel/20 group-hover:rotate-12 transition-transform text-white">
                 <ShoppingCart size={20} />
               </div>
               <div className="text-left">
                 <p className="text-[10px] font-black text-caramel uppercase tracking-widest">{cartCount} Item Terpilih</p>
-                <p className="font-serif font-bold text-lg">{fmt(cartTotal)}</p>
+                <p className="font-serif font-bold text-xl">{fmt(cartTotal)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 relative z-10 bg-white/10 px-4 py-2 rounded-2xl font-bold text-xs uppercase tracking-widest backdrop-blur-sm group-hover:bg-caramel transition-colors">
-              Check out <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            <div className="flex items-center gap-2 relative z-10 bg-white/10 px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest backdrop-blur-sm group-hover:bg-caramel transition-colors">
+              Checkout <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
         </div>
@@ -519,7 +710,7 @@ function MenuContent() {
       {/* SUCCESS OVERLAY */}
       {showSuccess && (
         <div className="fixed inset-0 z-[100] bg-espresso/90 backdrop-blur-xl flex items-center justify-center p-8 animate-fade-in">
-          <div className="bg-parchment rounded-[48px] p-10 text-center max-w-[340px] animate-scale-up border border-white/20 shadow-2xl relative overflow-hidden">
+          <div className="bg-parchment rounded-[48px] p-10 text-center w-full max-w-[340px] animate-scale-up border border-white/20 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-gradient-to-r from-transparent via-caramel to-transparent"></div>
             <div className="flex justify-center mb-6 animate-float">
               <PartyPopper size={64} className="text-caramel drop-shadow-xl" />
@@ -541,11 +732,33 @@ function MenuContent() {
         </div>
       )}
 
+      {/* TABLE INACTIVE OVERLAY */}
+      {!isTableActive && !loading && (
+        <div className="fixed inset-0 z-[110] bg-espresso/95 backdrop-blur-2xl flex items-center justify-center p-8 animate-fade-in">
+          <div className="bg-white rounded-[48px] p-10 text-center w-full max-w-[340px] animate-scale-up border border-latte shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1.5 bg-red-500"></div>
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-500">
+                <QrCode size={40} />
+              </div>
+            </div>
+            <h2 className="font-serif font-bold text-2xl mb-3 text-espresso">Meja Belum Aktif</h2>
+            <p className="text-sm text-mocha opacity-70 mb-8 leading-relaxed font-medium">
+              Maaf, {tableNumber} saat ini sedang tidak aktif. Silakan hubungi barista untuk membukakan meja ini.
+            </p>
+            <div className="p-4 bg-parchment rounded-2xl border border-latte/50 mb-2">
+              <p className="text-[10px] font-black text-mocha uppercase tracking-widest">Status Meja</p>
+              <p className="text-sm font-bold text-red-500 mt-1 uppercase">Inactive / Closed</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         .animate-fade-in-right { animation: fadeInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }

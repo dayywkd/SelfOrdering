@@ -104,6 +104,12 @@ export default function OrderManagement() {
         return;
       }
 
+      // AUTO CLOSE MEJA (Set status meja jadi inactive)
+      await supabase
+        .from('tables')
+        .update({ status: 'inactive' })
+        .eq('number', orderToConfirm.table_number);
+
       // Update sales_count di tabel menu
       for (const itemStr of orderToConfirm.items) {
         const match = itemStr.match(/^(\d+)x\s+(.+)$/);

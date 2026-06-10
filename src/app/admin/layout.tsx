@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { Toaster, toast } from 'sonner';
 import { 
   LayoutDashboard, 
   Coffee, 
@@ -13,7 +14,8 @@ import {
   ChevronRight,
   Bell,
   Search,
-  User
+  User,
+  QrCode
 } from 'lucide-react';
 
 export default function AdminLayout({
@@ -50,10 +52,27 @@ export default function AdminLayout({
     };
     fetchPending();
 
+    const playNotificationSound = () => {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log('Audio play blocked by browser policy'));
+    };
+
     // Subscribe to new orders for notifications
     const subscription = supabase
       .channel('public:orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchPending)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
+        fetchPending();
+        playNotificationSound();
+        toast.success(`Pesanan Baru!`, {
+          description: `${payload.new.customer_name} di ${payload.new.table_number}`,
+          action: {
+            label: 'Lihat',
+            onClick: () => router.push('/admin/orders')
+          },
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, fetchPending)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'orders' }, fetchPending)
       .subscribe();
 
     return () => {
@@ -85,6 +104,7 @@ export default function AdminLayout({
   const navItems = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Manajemen Menu', href: '/admin/menu', icon: Coffee },
+    { name: 'Manajemen Meja', href: '/admin/tables', icon: QrCode },
     { name: 'Pesanan Masuk', href: '/admin/orders', icon: ShoppingBag },
     { name: 'Laporan', href: '/admin/reports', icon: FileBarChart },
   ];
@@ -225,6 +245,7 @@ export default function AdminLayout({
           {children}
         </div>
       </main>
+      <Toaster position="top-right" richColors />
     </div>
   );
 }

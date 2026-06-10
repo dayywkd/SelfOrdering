@@ -18,6 +18,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // 0. Validasi status meja (Meja harus ACTIVE)
+    const { data: tableData, error: tableError } = await supabase
+      .from('tables')
+      .select('status')
+      .eq('number', tableNumber)
+      .single();
+
+    if (tableError || tableData?.status !== 'active') {
+      return NextResponse.json({ 
+        error: `Meja (${tableNumber}) tidak aktif atau tidak terdaftar. Silakan hubungi barista.` 
+      }, { status: 403 });
+    }
+
     // 1. Buat Invoice Tagihan di Xendit
     const invoiceRequest = {
       externalId: `INV-${orderId}`,
@@ -25,8 +38,8 @@ export async function POST(request: Request) {
       payerEmail: 'pelanggan@ninecoffee.local', // Bisa dikembangkan jika minta email user
       description: `Pesanan ${tableNumber} - ${customerName}`,
       // Xendit akan membuat link pembayaran yang mengarahkan user ke halaman sukses/gagal
-      successRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}?payment=success`,
-      failureRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}?payment=failed`,
+      successRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}/order/${orderId}?payment=success`,
+      failureRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}/order/${orderId}?payment=failed`,
       currency: 'IDR',
       items: items.map((item: string) => {
         // Parsing "1x Nama Menu"

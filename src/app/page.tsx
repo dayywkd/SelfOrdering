@@ -93,7 +93,8 @@ function MenuContent() {
     // Cek URL params, jika ada ?payment=success berarti kembali dari Xendit
     if (searchParams.get('payment') === 'success') {
       setShowSuccess(true);
-      // Bersihkan URL tanpa reload
+      // Bersihkan URL tanpa reload, tapi tetap pertahankan parameter penting
+      const orderId = searchParams.get('orderId');
       window.history.replaceState(null, '', window.location.pathname + (tableParam ? `?table=${tableParam}` : ''));
     }
   }, [searchParams, tableParam]);

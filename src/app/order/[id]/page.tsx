@@ -94,6 +94,15 @@ export default function OrderTracking() {
     }
   };
 
+  const backToMenu = () => {
+    if (order?.table_number) {
+      const tableNum = order.table_number.replace('Meja ', '');
+      router.push(`/?table=${tableNum}`);
+    } else {
+      router.push('/');
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-parchment">
       <Loader2 className="w-10 h-10 text-caramel animate-spin mb-4" />
@@ -115,7 +124,7 @@ export default function OrderTracking() {
   return (
     <div className="max-w-[430px] mx-auto bg-parchment min-h-screen font-sans text-espresso pb-20">
       <header className="sticky top-0 z-40 bg-parchment/80 backdrop-blur-xl px-5 pt-8 pb-4 flex items-center gap-4 border-b border-latte/30">
-        <button onClick={() => router.push('/')} className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white border border-latte shadow-sm active:scale-90 transition-all">
+        <button onClick={backToMenu} className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white border border-latte shadow-sm active:scale-90 transition-all">
           <ChevronLeft size={20} />
         </button>
         <div>
@@ -192,7 +201,7 @@ export default function OrderTracking() {
         </div>
 
         <button 
-          onClick={() => router.push('/')}
+          onClick={backToMenu}
           className="w-full bg-parchment border-2 border-latte text-mocha py-5 rounded-[28px] font-black text-sm tracking-widest uppercase hover:bg-white transition-all shadow-sm"
         >
           Pesan Menu Lainnya

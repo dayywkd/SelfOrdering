@@ -31,15 +31,17 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
+    const tableParam = tableNumber.replace('Meja ', '');
+
     // 1. Buat Invoice Tagihan di Xendit
     const invoiceRequest = {
       externalId: `INV-${orderId}`,
       amount: amount,
-      payerEmail: 'pelanggan@ninecoffee.local', // Bisa dikembangkan jika minta email user
+      payerEmail: 'pelanggan@ninecoffee.local', 
       description: `Pesanan ${tableNumber} - ${customerName}`,
-      // Xendit akan membuat link pembayaran yang mengarahkan user ke halaman sukses/gagal
-      successRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}/order/${orderId}?payment=success`,
-      failureRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}/order/${orderId}?payment=failed`,
+      // Redirect kembali ke MENU agar meja tetap tersimpan, sambil membawa orderId untuk tracking
+      successRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}?table=${tableParam}&payment=success&orderId=${orderId}`,
+      failureRedirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://ninecoffe.netlify.app/'}?table=${tableParam}&payment=failed`,
       currency: 'IDR',
       items: items.map((item: string) => {
         // Parsing "1x Nama Menu"

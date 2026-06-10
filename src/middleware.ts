@@ -56,7 +56,15 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Protected routes: /admin and its subroutes
+  // 1. Redirect root '/' ke '/login' jika tidak ada parameter meja (Biar admin langsung login)
+  if (request.nextUrl.pathname === '/') {
+    const tableParam = request.nextUrl.searchParams.get('table')
+    if (!tableParam) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  // 2. Protected routes: /admin and its subroutes
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (!session) {
       return NextResponse.redirect(new URL('/login', request.url))
